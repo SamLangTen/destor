@@ -6,3 +6,8 @@ Makefile
 .deps
 tags
 destor
+
+autom4te.cache
+aclocal.m4
+config.log
+config.status

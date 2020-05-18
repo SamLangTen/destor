@@ -11,15 +11,7 @@ CFLAGS="-g -O2 -Wall"
 
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_create])
-AC_CHECK_LIB([glib], [g_hash_table_new],[found_glib=yes],[found_glib=no])
-    if test "$found_glib" = "no"; then
-    AC_MSG_ERROR([*** Working glib library not found ***])
-    fi
-AC_CHECK_LIB([glib], [g_thread_init],[thread_safe=no],[thread_safe=yes])
-    if test "$thread_safe" = "no"; then
-    AC_MSG_ERROR([*** The version of glib is too low ***])
-    fi
-AC_CHECK_LIB([crypto],[SHA_Update],[found_crypto=yes],[found_crypto=no])
+AC_CHECK_LIB([crypto],[SHA1_Update],[found_crypto=yes],[found_crypto=no])
     if test "$found_crypto" = "no"; then
     AC_MSG_ERROR([*** Working crypto library not found ***])
     fi
@@ -31,10 +23,6 @@ AC_PROG_RANLIB
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h stdint.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
-AC_CHECK_HEADERS([glib.h],[found_glib_h=yes],[found_glib_h=no])
-    if test "$found_glib_h" = "no"; then
-    AC_MSG_ERROR([*** Working glib.h header not found ***])
-    fi
 AC_CHECK_HEADERS([openssl/sha.h], [found_sha_h=yes],[found_sha_h=no])
     if test "$found_sha_h" = "no"; then
     AC_MSG_ERROR([*** Working sha.h header not found ***])
@@ -53,6 +41,14 @@ AC_TYPE_SIZE_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
+
+# Checks for GLib
+PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.32], [found_glib=yes],[found-glib=no])
+    if test "$found_glib" = "no"; then
+    AC_MSG_ERROR([*** glib-2.0 not found ***])
+    fi
+CFLAGS+=" "
+CFLAGS+=$GLIB_CFLAGS
 
 # Checks for library functions.
 AC_FUNC_MALLOC
