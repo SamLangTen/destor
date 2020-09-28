@@ -15,3 +15,6 @@ config.status
 CMakeCache.txt
 *.cmake
 CMakeFiles
+build
+
+.vscode
