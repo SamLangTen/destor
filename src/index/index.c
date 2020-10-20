@@ -148,6 +148,13 @@ static void index_lookup_base(struct segment *s){
             continue;
 
         /* First check it in the storage buffer */
+        /* 
+         * Container Buffer是最近准备写入的Container的缓冲区，
+         * 如果chunk与这个区域某个chunk相同，意味着这个chunk是最近写入的，
+         * 因此这个chunk不需要再重写了，
+         * 故除了要标记为DUPLICATE外，还需要标记REWRITE_DENIED。
+         *        
+         */
         if(storage_buffer.container_buffer
                 && lookup_fingerprint_in_container(storage_buffer.container_buffer, &c->fp)){
             c->id = get_container_id(storage_buffer.container_buffer);
