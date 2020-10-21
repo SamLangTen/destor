@@ -137,6 +137,10 @@ extern struct{
     GSequence *chunks;
 } storage_buffer;
 
+/* 该函数实现了Base流程的chunk重复检测。
+ * Base流程不采用任何相似性检测，由各类缓存和缓冲区开始查找chunk，
+ * 如果上述流程查找失败，则会从指纹索引表中查找chunk。
+ */
 static void index_lookup_base(struct segment *s){
 
     GSequenceIter *iter = g_sequence_get_begin_iter(s->chunks);
@@ -149,7 +153,9 @@ static void index_lookup_base(struct segment *s){
 
         /* First check it in the storage buffer */
         /* 
-         * Container Buffer是最近准备写入的Container的缓冲区，
+         * Container Buffer是filter阶段准备写入的Container的缓冲区，
+         * 由于destor各个阶段异步进行的，部分chunk还在dedup阶段时，
+         * 可能有早期输入的chunk已经进入了filter阶段。
          * 如果chunk与这个区域某个chunk相同，意味着这个chunk是最近写入的，
          * 因此这个chunk不需要再重写了，
          * 故除了要标记为DUPLICATE外，还需要标记REWRITE_DENIED。
@@ -166,10 +172,33 @@ static void index_lookup_base(struct segment *s){
          * First check the buffered fingerprints,
          * recently backup fingerprints.
          */
+        /*
+         * 在指纹缓冲区查找，Buffered Fingerprints是一个带Hash索引的队列结构：
+         * *--- hash table ---*
+         * |     chunk fp 1      | ==> chunk1(indexElem), chunk2(indexElem)...
+         * |-------------------|
+         * |     chunk fp 2      | ==> chunk3(indexElem), chunk4(indexElem)...
+         * |-------------------|
+         * |     chunk fp 3      | ==> chunk5(indexElem), chunk6(indexElem)...
+         * |-------------------|
+         * 在下面流程中，每归档一个unique的chunk，就把这个chunk插入到中Buffered Fingerprints，
+         * 这样能保证Buffered Fingerprints每个fp队列最前端的chunk记录所指向的container都是最新的，
+         * 最终使得近期归档的duplicate chunk都使用较新的container中的unique chunk。
+         */
         GQueue *tq = g_hash_table_lookup(index_buffer.buffered_fingerprints, &c->fp);
         if (!tq) {
+            /* 
+             * 如果Buffered Fingerprints找不到同样指纹的条目，表示该chunk可能是unique的，
+             * 为该chunk的fp建立一个索引及队列。
+             */
             tq = g_queue_new();
         } else if (!CHECK_CHUNK(c, CHUNK_DUPLICATE)) {
+            /*
+             * 如果在BF找到了相同指纹的条目，而且该chunk还没标记为duplicate，
+             * 就在BF中查找最新插入的、fp相同的unique chunk，
+             * 并将该unique chunk的container id设置为自己的container id，
+             * 以达到duplicate chunk引用较新container的目的。
+             */
             struct indexElem *be = g_queue_peek_head(tq);
             c->id = be->id;
             SET_CHUNK(c, CHUNK_DUPLICATE);
@@ -216,7 +245,7 @@ static void index_lookup_base(struct segment *s){
 
         g_queue_push_tail(tq, ne);
         g_hash_table_replace(index_buffer.buffered_fingerprints, &ne->fp, tq);
-
+        
         index_buffer.chunk_num++;
     }
 
